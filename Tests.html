@@ -1,0 +1,508 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+    <title>Vidyano Tests</title>
+
+    <link rel="stylesheet" href="qunit-1.10.0.css" />
+    <script src="qunit-1.10.0.js"></script>
+    <script src="https://vidyano.azurewebsites.net/GetCoreJS"></script>
+
+    <script>
+        var equal = equal || function () { };
+        var deepEqual = deepEqual || function () { };
+        var strictEqual = strictEqual || function () { };
+        var notEqual = notEqual || function () { };
+        var ok = ok || function () { };
+
+        function fromServiceString(value, type, expected, message) {
+            equal(ServiceGateway.fromServiceString(value, type), expected, message);
+        }
+        function fromServiceStringDate(value, expected, message) {
+            deepEqual(ServiceGateway.fromServiceString(value, "Date"), expected, message);
+        }
+        function toServiceString(value, type, expected, message) {
+            equal(ServiceGateway.toServiceString(value, type), expected, message);
+        }
+        function Resource(item) {
+            this.key = item.getValue("Key");
+            this.data = item.getValue("Data");
+        };
+
+        module("ServiceGateway");
+        test("fromServiceString", 17, function () {
+            fromServiceStringDate("31-12-2012 00:00:00.000", new Date(2012, 11, 31));
+            fromServiceStringDate("31-12-2012 12:34:15.000", new Date(2012, 11, 31, 12, 34, 15));
+            fromServiceStringDate("31-12-2012 12:34:56.789", new Date(2012, 11, 31, 12, 34, 56, 789));
+            fromServiceString(null, "NullableDateTime", null);
+            fromServiceString(null, "NullableDate", null);
+            notEqual(ServiceGateway.fromServiceString(null, "Date"), null, "null should return Today for Date");
+            notEqual(ServiceGateway.fromServiceString(null, "DateTime"), null, "null should return Now for DateTime");
+
+            fromServiceString("0:00:00:00.0000000", "Time", "0:00:00:00.0000000");
+            fromServiceString(null, "Time", "0:00:00:00.0000000");
+            fromServiceString(null, "NullableTime", null);
+            fromServiceString("0:00:12:34.0000000", "Time", "0:00:12:34.0000000");
+
+            fromServiceString("true", "Boolean", true);
+            fromServiceString("false", "NullableBoolean", false);
+            fromServiceString(null, "NullableBoolean", null);
+
+            fromServiceString("5", "Int16", 5);
+            fromServiceString("5.1", "Int32", 5);
+            fromServiceString("1.5", "Double", 1.5);
+        });
+        test("toServiceString", 22, function () {
+            toServiceString(new Date(2012, 11, 31), "Date", "31-12-2012 00:00:00");
+            toServiceString(new Date(2012, 11, 31, 12, 34, 15), "NullableDate", "31-12-2012 12:34:15");
+            toServiceString(new Date(2012, 11, 31, 12, 34, 56, 789), "DateTime", "31-12-2012 12:34:56.789");
+            toServiceString(null, "NullableDateTime", null);
+
+            toServiceString(null, "Time", "0:00:00:00.0000000");
+            toServiceString(null, "NullableTime", null);
+            toServiceString("2:34", "Time", "0:02:34:00.0000000");
+            toServiceString("12:34", "Time", "0:12:34:00.0000000");
+            toServiceString("2:34:56", "Time", "0:02:34:56.0000000");
+            toServiceString("12:34:56", "Time", "0:12:34:56.0000000");
+            toServiceString("12:34.7890000", "Time", "0:12:34:00.7890000");
+            toServiceString("0:12:34:00", "Time", "0:12:34:00.0000000");
+            toServiceString("1:12:34:00", "Time", "1:12:34:00.0000000");
+            toServiceString("0:12:34:00.0000000", "Time", "0:12:34:00.0000000");
+
+            toServiceString("2012/12/31 12:34 +05:00", "DateTimeOffset", "31-12-2012 12:34:00 +05:00");
+            var dateOffset = ServiceGateway.fromServiceString("31-12-2012 12:34:00 +05:00", "DateTimeOffset");
+            toServiceString(dateOffset, "DateTimeOffset", "31-12-2012 12:34:00 +05:00");
+
+            toServiceString(true, "Boolean", "true");
+            toServiceString("true", "Boolean", "true");
+            toServiceString(false, "NullableBoolean", "false");
+            toServiceString(null, "NullableBoolean", null);
+
+            toServiceString(5, "Int16", "5");
+            toServiceString(1.5, "Double", "1.5");
+        });
+
+        module("Common");
+        test("Array extensions", 20, function () {
+            var array1 = [1, 5, 7];
+            array1.remove(5);
+            deepEqual(array1, [1, 7]);
+            array1.remove(7);
+            deepEqual(array1, [1]);
+
+            var array2 = [1, 2, 3];
+            deepEqual(array2.where(function (i) { return i < 3; }), [1, 2]);
+            equal(array2.firstOrDefault(), 1);
+            equal(array2.last(), 3);
+            equal(array2.orderByDescending().firstOrDefault(), 3);
+
+            var array3 = [5, 2, 9, 4];
+            deepEqual(array3.orderBy(), [2, 4, 5, 9]);
+            deepEqual(array3.orderByDescending(), [9, 5, 4, 2]);
+            var sum = 0;
+            array3.run(function (i) { sum += i; });
+            equal(sum, 20);
+
+            var array4 = ['x', 'xxx', 'xx'];
+            equal(array4.indexOf('xx'), 2);
+            equal(array4.indexOf('xxxx'), -1);
+            deepEqual(array4.select('length'), [1, 3, 2]);
+            deepEqual(array4.orderBy('length'), ['x', 'xx', 'xxx']);
+            deepEqual(array4.orderByDescending('length'), ['xxx', 'xx', 'x']);
+            deepEqual(array4.select('length'), [3, 2, 1]);
+            equal(array4.contains('xx'), true);
+            equal(array4.contains('xxxx'), false);
+            deepEqual([1, 1, 2, 3].distinct(), [1, 2, 3]);
+
+            var array5 = [{ x: 5 }, { x: 3 }, { x: 10 }];
+            deepEqual(array5.select(function (i) { return i.x; }), [5, 3, 10]);
+            deepEqual(array5.orderBy(function (i) { return i.x; }), [{ x: 3 }, { x: 5 }, { x: 10 }]);
+        });
+        test("Object extensions", 30, function () {
+            var obj = { firstName: 'Steve', lastName: 'Hansen' };
+            deepEqual(copyProperties(obj, ['firstName']), { firstName: 'Steve' });
+            
+            var objectTamperingIssue = { a: '', b: null, c: undefined, /* d: undefined, */ e: 0, f: 1, g: false, h: true, i: [], j: [0], k: {}, l: ' ', m: '0' };
+            var copyIssue = copyProperties(objectTamperingIssue, 'abcdefghijklm'.split(''));
+            deepEqual(copyIssue.a, '');
+            ok(!('b' in copyIssue), 'No b property in copy (null)');
+            ok(!('c' in copyIssue), 'No c property in copy (undefined)');
+            ok(!('d' in copyIssue), 'No d property in copy (missing)');
+            ok(!('e' in copyIssue), 'No e property in copy (0)');
+            deepEqual(copyIssue.f, 1);
+            ok(!('g' in copyIssue), 'No g property in copy (false)');
+            deepEqual(copyIssue.h, true);
+            ok(!('i' in copyIssue), 'No i property in copy ([])');
+            deepEqual(copyIssue.j, [0]);
+            deepEqual(copyIssue.k, {});
+            deepEqual(copyIssue.l, ' ');
+            deepEqual(copyIssue.m, '0');
+
+            function Person() { }
+            Person.prototype.fullName = function () { return this.firstName + ' ' + this.lastName; };
+            changePrototype(obj, Person);
+            equal(obj.constructor, Person);
+            equal(obj.fullName(), 'Steve Hansen');
+
+            equal(isNull(), true);
+            equal(isNull(null), true);
+            equal(isNull(false), false);
+            equal(isNull(""), false);
+            equal(isNull(" "), false);
+
+            equal(isNullOrEmpty(null), true);
+            equal(isNullOrEmpty(false), false);
+            equal(isNullOrEmpty(""), true);
+            equal(isNullOrEmpty(" "), false);
+
+            equal(isNullOrWhiteSpace(null), true);
+            equal(isNullOrWhiteSpace(false), false);
+            equal(isNullOrWhiteSpace(""), true);
+            equal(isNullOrWhiteSpace(" "), true);
+
+            notEqual(getRandom(), null);
+        });
+        test("String extensions", 25, function () {
+            equal(String.empty, "");
+
+            strictEqual("abc".contains("a"), true);
+            strictEqual("abc".contains("d"), false);
+
+            equal(String.format("{0}", 10), "10");
+            equal(String.format("€ {0}", 10), "€ 10");
+
+            equal(String.fromChar("€", 3), "€€€");
+
+            equal("e".padLeft(4), "   e");
+            equal("e".padLeft(4, "a"), "aaae");
+
+            equal("e".padRight(4), "e   ");
+            equal("e".padRight(4, "a"), "eaaa");
+
+            strictEqual("abc".endsWith("c"), true);
+            strictEqual("abc".endsWith("d"), false);
+            strictEqual("abc".startsWith("a"), true);
+            strictEqual("abc".startsWith("b"), false);
+
+            equal("abc".insert("d", 1), "adbc");
+
+            equal("   abc".trimStart(), "abc");
+            equal("___abc".trimStart("_"), "abc");
+            equal("abc   ".trimEnd(), "abc");
+            equal("abc___".trimEnd("_"), "abc");
+            equal("   abc   ".trim(), "abc");
+            equal("___abc___".trim("_"), "abc");
+
+            equal("/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/2wBDAQkJCQwLDBgNDRgyIRwhMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjL/wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAf/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFAEBAAAAAAAAAAAAAAAAAAAAAP/EABQRAQAAAAAAAAAAAAAAAAAAAAD/2gAMAwEAAhEDEQA/AL+AD//Z".asDataUri(), "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/2wBDAQkJCQwLDBgNDRgyIRwhMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjL/wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAf/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFAEBAAAAAAAAAAAAAAAAAAAAAP/EABQRAQAAAAAAAAAAAAAAAAAAAAD/2gAMAwEAAhEDEQA/AL+AD//Z");
+            equal("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABAQMAAAAl21bKAAAAA1BMVEUAAACnej3aAAAAAXRSTlMAQObYZgAAAApJREFUCB1jYAAAAAIAAc/INeUAAAAASUVORK5CYII=".asDataUri(), "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABAQMAAAAl21bKAAAAA1BMVEUAAACnej3aAAAAAXRSTlMAQObYZgAAAApJREFUCB1jYAAAAAIAAc/INeUAAAAASUVORK5CYII=");
+            equal("R0lGODdhAgACAIAAAAAAAP///ywAAAAAAgACAAACAoRRADs=".asDataUri(), "data:image/gif;base64,R0lGODdhAgACAIAAAAAAAP///ywAAAAAAgACAAACAoRRADs=");
+            equal("QW55IG90aGVyIHN0cmluZw==".asDataUri(), "data:application/octet+stream;base64,QW55IG90aGVyIHN0cmluZw==");
+        });
+        test("Number extensions", 37, function () {
+            strictEqual(Number.parse(), 0);
+            strictEqual(Number.parse(""), 0);
+
+            strictEqual(Number.parse("5"), 5);
+            strictEqual(Number.parse("5.5"), 5.5);
+            strictEqual(Number.parse("5f"), 5.0);
+            strictEqual(Number.parse("5e3"), 5000.0);
+
+            var i = 1.234, i2 = -1.234, i3 = 15, i4 = 255, i5 = 10000;
+            equal(i.format("d"), "1");
+            equal(i2.format("d"), "-1");
+            equal(i.format("d2"), "01");
+            equal(i.format("d5"), "00001");
+            equal(i2.format("d5"), "-00001");
+
+            equal(i.format("x"), "1");
+            equal(i3.format("x"), "f");
+            equal(i4.format("x"), "ff");
+            equal(i3.format("X"), "F");
+            equal(i4.format("X"), "FF");
+            equal(i4.format("X4"), "00FF");
+
+            equal(i.format("e"), "1.234e+0");
+            equal(i.format("e2"), "1.23e+0");
+            equal(i.format("e1"), "1.2e+0");
+            equal(i5.format("e"), "1e+4");
+            equal(i5.format("E"), "1E+4");
+
+            equal(i.format("f"), "1.23");
+            equal(i.format("f3"), "1.234");
+            equal(i3.format("f"), "15.00");
+            equal(i3.format("f3"), "15.000");
+
+            equal(i.format("c"), "¤1.23");
+            equal(i5.format("c"), "¤10,000.00");
+
+            equal(i.format("p"), "123.40 %");
+            equal(i.format("p0"), "123 %");
+            equal(i.format("p2"), "123.40 %");
+            equal(i3.format("p"), "1,500.00 %");
+            equal(i3.format("p0"), "1,500 %");
+
+            equal(i.format("g"), "1.234");
+            equal(i.format("g2"), "1.23");
+            equal(i.format("g0"), "1");
+            equal(i3.format("g"), "15");
+        });
+        test("Date extensions", 39, function () {
+            var date = new Date(2012, 11, 31, 12, 34, 56);
+
+            equal(date.format(), "12/31/2012 12:34:56");
+            equal(date.format("G"), "12/31/2012 12:34:56");
+
+            equal(date.format("f"), "Monday, 31 December 2012 12:34");
+            equal(date.format("F"), "Monday, 31 December 2012 12:34:56");
+            equal(date.format("d"), "12/31/2012");
+            equal(date.format("D"), "Monday, 31 December 2012");
+            equal(date.format("t"), "12:34");
+            equal(date.format("T"), "12:34:56");
+            equal(date.format("g"), "12/31/2012 12:34");
+            equal(date.format("r"), "Mon, 31 Dec 2012 12:34:56 GMT");
+            equal(date.format("R"), "Mon, 31 Dec 2012 12:34:56 GMT");
+            equal(date.format("u"), "2012-12-31 12:34:56Z");
+            equal(date.format("s"), "2012-12-31T12:34:56");
+
+            equal(date.format("yyyy"), "2012");
+            equal(date.format("yy"), "12");
+            equal(date.format("y"), "12");
+
+            equal(date.format("dddd"), "Monday");
+            equal(date.format("ddd"), "Mon");
+            equal(date.format("dd"), "31");
+
+            equal(date.format("MMMM"), "December");
+            equal(date.format("MMM"), "Dec");
+            equal(date.format("MM"), "12");
+            equal(date.format("M"), "12");
+
+            equal(date.format("h"), "12");
+            equal(date.format("hh"), "12");
+            equal(date.format("H"), "12");
+            equal(date.format("HH"), "12");
+
+            equal(date.format("mm"), "34");
+            equal(date.format("m"), "34");
+
+            equal(date.format("ss"), "56");
+            equal(date.format("h:s"), "12:56");
+
+            equal(date.format("HH t"), "12 P");
+            equal(date.format("HH tt"), "12 PM");
+
+            equal(date.format("fff"), "000");
+            equal(date.format("ff"), "00");
+            equal(date.format("ss.f"), "56.0");
+
+            equal(date.format("hh:mm:ss.fff"), "12:34:56.000");
+            equal(date.format("hh:mm:ss.ff"), "12:34:56.00");
+            equal(date.format("hh:mm:ss.f"), "12:34:56.0");
+        });
+        test("Boolean extensions", 8, function () {
+            strictEqual(Boolean.parse(), null);
+            strictEqual(Boolean.parse("TRUE"), true);
+            strictEqual(Boolean.parse("True"), true);
+            strictEqual(Boolean.parse("true"), true);
+            strictEqual(Boolean.parse("FALSE"), false);
+            strictEqual(Boolean.parse("False"), false);
+            strictEqual(Boolean.parse("false"), false);
+            strictEqual(Boolean.parse("invalid"), null);
+        });
+        test("Selector", 6, function () {
+            var selector = [1, 2, 3].toSelector();
+            deepEqual(selector, [1, 2, 3]);
+
+            equal(selector.selectedItem(), null);
+            selector.selectedItem(2);
+            equal(selector.selectedItem(), 2);
+            throws(function () { selector.selectedItem('x'); }, "Item is not in this array.");
+
+            equal(selector.selectedItems(), null);
+            selector.selectedItems([2, 3]);
+            deepEqual(selector.selectedItems(), [2, 3]);
+        });
+        test("StringBuilder", 3, function () {
+            var sb = new StringBuilder();
+
+            equal(sb.toString(), "");
+
+            sb.append("hello ").append("world");
+            equal(sb.toString(), "hello world");
+
+            sb.clear();
+            sb.appendLine("hello world");
+            equal(sb.toString(), "hello world\r\n");
+        });
+
+        module("CultureInfo");
+        test("invariant", 9, function () {
+            CultureInfo.currentCulture = CultureInfo.invariantCulture;
+
+            equal(String.format("{0:N2}", 1.5), "1.50");
+            equal(String.format("{0:C}", 1.5), "¤1.50");
+            equal(String.format("{0:P}", .99), "99.00 %");
+
+            equal(String.format("{0}", new Date(2012, 11, 31)), "12/31/2012 00:00:00");
+            equal(String.format("{0:yyyy}", new Date(2012, 11, 31)), "2012");
+            equal(String.format("{0:m}", new Date(2012, 11, 31)), "0");
+            equal(String.format("{0:mm}", new Date(2012, 11, 31)), "00");
+            equal(String.format("{0:M}", new Date(2012, 11, 31)), "12");
+            equal(String.format("{0:MMM}", new Date(2012, 11, 31)), "Dec");
+        });
+        test("nl-BE", 9, function () {
+            CultureInfo.currentCulture = CultureInfo.cultures['nl-BE'];
+
+            equal(String.format("{0:N2}", 1.5), "1,50");
+            equal(String.format("{0:C}", 1.5), "€ 1,50");
+            equal(String.format("{0:P}", .99), "99,00%");
+
+            equal(String.format("{0}", new Date(2012, 11, 31)), "31/12/2012 0:00:00");
+            equal(String.format("{0:yyyy}", new Date(2012, 11, 31)), "2012");
+            equal(String.format("{0:m}", new Date(2012, 11, 31)), "0");
+            equal(String.format("{0:mm}", new Date(2012, 11, 31)), "00");
+            equal(String.format("{0:M}", new Date(2012, 11, 31)), "12");
+            equal(String.format("{0:MMM}", new Date(2012, 11, 31)), "dec");
+
+            CultureInfo.currentCulture = CultureInfo.invariantCulture;
+        });
+
+        module("ExpressionParser");
+        test("expressions", 15, function () {
+            var lessThen5 = ExpressionParser.get("<5");
+            equal(lessThen5(5), false);
+            equal(lessThen5(4), true);
+
+            var between5And7 = ExpressionParser.get("5<x<7");
+            equal(between5And7(5), false);
+            equal(between5And7(6), true);
+            equal(between5And7(7), false);
+
+            var between5And7Incl = ExpressionParser.get("5<x<=7");
+            equal(between5And7Incl(5), false);
+            equal(between5And7Incl(6), true);
+            equal(between5And7Incl(7), true);
+            equal(between5And7Incl(8), false);
+
+            var alwaysTrue = ExpressionParser.get();
+            equal(alwaysTrue(0), true);
+            equal(alwaysTrue(1), true);
+            equal(alwaysTrue(), true);
+
+            var only3 = ExpressionParser.get("=3");
+            equal(only3(0), false);
+            equal(only3(3), true);
+            equal(only3(10), false);
+        });
+
+        module("Integration Tests");
+        app.gateway.serviceUri = "https://vidyano.azurewebsites.net/";
+        app.signIn("demo", "demo", function () {
+            test("Application signIn", function () {
+                equal(app.userName, "demo", "UserName should be 'demo'");
+                equal(app.password, null, "Password should be null");
+                notEqual(app.authToken, null, "AuthToken should not be null");
+                notEqual(app.templateParser, null, "TemplateParser should not be null as we included underscore");
+                notEqual(app.templates, null, "Templates should be queried as we included Resource");
+                deepEqual(app.customRoutes, {}, "CustomRoutes should be empty for core");
+
+                function getPersistentObjectTest(name, expected, onCompleted) {
+                    app.gateway.getPersistentObject(null, "MyCRM.Customer", "UNIT_TEST_" + name,
+                        function (result) {
+                            test("getPersistentObject " + name, expected, function () { onCompleted(result); });
+                        }, function (e) {
+                            test("getPersistentObject " + name, 1, function () { ok(false, e); });
+                        });
+                }
+
+                getPersistentObjectTest("ReadOnly", 20, function (result) {
+                    equal(result.notification, null);
+                    equal(result.objectId, "UNIT_TEST_ReadOnly");
+
+                    var firstNameAttr = result.getAttribute("FirstName");
+                    var lastNameAttr = result.getAttribute("LastName");
+                    notEqual(firstNameAttr, null, "FistName attribute should exist");
+                    notEqual(lastNameAttr, null, "LastName attribute should exist");
+                    equal(result.getAttribute("NON_EXISTING_ATTR"), null, "NON_EXISTING_ATTR should not exist");
+
+                    notEqual(result.getAttributeValue("FirstName"), null);
+                    equal(result.getAttributeValue("FirstName"), firstNameAttr.value);
+
+                    equal(result.inEdit, false);
+                    equal(result.isDirty(), false);
+                    result.editMode(true);
+
+                    equal(result.inEdit, true);
+                    equal(result.isDirty(), false);
+
+                    lastNameAttr.setValue("Other value");
+                    notEqual(lastNameAttr.value, "Other value");
+                    equal(result.isDirty(), false);
+                    equal(firstNameAttr.isValueChanged, false);
+
+                    var previous = firstNameAttr.value;
+                    firstNameAttr.setValue(previous + "TEST");
+                    notEqual(firstNameAttr.value, previous);
+                    equal(result.isDirty(), true);
+                    equal(firstNameAttr.isValueChanged, true);
+
+                    result.cancelEdit();
+                    equal(firstNameAttr.value, previous);
+                    equal(result.isDirty(), false);
+                    equal(firstNameAttr.isValueChanged, false);
+                });
+
+                getPersistentObjectTest("Time", 13, function (result) {
+                    equal(result.notification, null);
+                    var firstNameAttr = result.getAttribute("FirstName");
+                    var firstName = firstNameAttr.value;
+                    var middleName = result.getAttributeValue("MiddleName");
+                    var phone = result.getAttributeValue("Phone");
+
+                    equal(firstName, "0:12:34:00.0000000");
+                    equal(firstNameAttr.displayValue(), "12:34");
+                    equal(result.getAttribute("MiddleName").displayValue(), "12:34:56.789");
+                    equal(middleName, "0:12:34:56.7890000");
+                    equal(phone, "1:12:34:56.7890000");
+                    equal(result.getAttributeValue("LastName"), "0:12:34:56.0000000");
+                    equal(result.getAttributeValue("Suffix"), "0:00:00:00.0000000");
+
+                    equal(ServiceGateway.fromServiceString(firstName, "Time"), firstName);
+                    equal(ServiceGateway.toServiceString(firstName, "Time"), firstName);
+                    equal(ServiceGateway.toServiceString(middleName, "Time"), middleName);
+                    equal(ServiceGateway.toServiceString(phone, "Time"), phone);
+
+                    result.setAttributeValue("FirstName", "23:45");
+                    equal(result.getAttributeValue("FirstName"), "0:23:45:00.0000000");
+                });
+
+                getPersistentObjectTest("DateTimeOffset", 6, function (result) {
+                    equal(result.notification, null);
+                    var firstNameAttr = result.getAttribute("FirstName");
+                    var firstName = firstNameAttr.value;
+
+                    equal(firstName, "31-12-2012 12:34:00 +02:00");
+                    var dateOffset = ServiceGateway.fromServiceString(firstName, "DateTimeOffset");
+                    equal(dateOffset.getTime(), 1356953640000);
+                    equal(dateOffset.netOffset(), "+02:00");
+                    equal(dateOffset.netType(), "DateTimeOffset");
+
+                    var date = new Date(2012, 11, 31, 23, 45);
+                    date.netOffset("+01:00");
+                    date.netType("DateTimeOffset");
+                    result.setAttributeValue("FirstName", date);
+                    equal(firstNameAttr.value, "31-12-2012 23:45:00 +01:00");
+                });
+            });
+        }, function (e) {
+            test("Application signIn", function () {
+                ok(false, e);
+            });
+        });
+    </script>
+</head>
+<body>
+    <div id="qunit"></div>
+    <div id="qunit-fixture"></div>
+</body>
+</html>
